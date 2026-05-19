@@ -7,7 +7,9 @@ from voulezvous.acquisition.workers.discovery import run_discovery
 from voulezvous.acquisition.workers.discovery_adult import run_user_discovery
 from voulezvous.models.enums import RightsStatus
 from voulezvous.models.tables import LibraryAsset, StreamControl
+from voulezvous.services.stream_control import get_or_create_stream_control
 from voulezvous.services.planner import generate_plan
+from voulezvous.services.cleanup import cleanup_orphan_downloads
 
 class ToolError(Exception): ...
 
@@ -32,11 +34,25 @@ async def tool_add_domain(db: AsyncSession, payload: dict) -> dict: p=DomainPoli
 async def tool_update_domain(db: AsyncSession, domain_id: UUID, patch: dict) -> dict: return {"ok": True}
 async def tool_disable_domain(db: AsyncSession, domain_id: UUID) -> dict: return {"ok": True}
 async def tool_start_stream(db: AsyncSession) -> dict:
-    sc=(await db.execute(select(StreamControl).where(StreamControl.key=='main'))).scalar_one_or_none();
-    if sc: sc.desired_running=True; sc.status='running'; await db.commit(); return {"ok":True}
+    sc = await get_or_create_stream_control(db)
+    sc.desired_running = True
+    sc.status = 'running'
+    sc.heartbeat_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True}
 async def tool_narrate(db: AsyncSession, run_id: UUID, text: str) -> dict: return {"ok":True}
 async def tool_restart_streamer(db: AsyncSession, reason: str) -> dict:
-    sc=(await db.execute(select(StreamControl).where(StreamControl.key=='main'))).scalar_one_or_none();
-    if sc: sc.updated_at=datetime.now(timezone.utc); await db.commit(); return {"ok":True,"reason":reason}
-async def tool_run_cleanup(db: AsyncSession) -> dict: return {"deleted":0}
+    sc = await get_or_create_stream_control(db)
+    sc.desired_running = False
+    sc.status = 'restart_requested'
+    sc.heartbeat_at = datetime.now(timezone.utc)
+    await db.commit()
+    sc.desired_running = True
+    sc.status = 'running'
+    sc.heartbeat_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True, "reason": reason}
+
+async def tool_run_cleanup(db: AsyncSession) -> dict:
+    return await cleanup_orphan_downloads(db)
 TOOLS={"generate_plan":tool_generate_plan,"run_discovery":tool_run_discovery,"run_user_discovery":tool_run_user_discovery,"promote_candidate":tool_promote_candidate,"block_candidate":tool_block_candidate,"block_asset":tool_block_asset,"add_keyword":tool_add_keyword,"pause_keyword":tool_pause_keyword,"boost_keyword":tool_boost_keyword,"add_domain":tool_add_domain,"update_domain":tool_update_domain,"disable_domain":tool_disable_domain,"start_stream":tool_start_stream,"narrate":tool_narrate,"restart_streamer":tool_restart_streamer,"run_cleanup":tool_run_cleanup}
