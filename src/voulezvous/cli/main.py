@@ -219,3 +219,14 @@ async def _orchestrator(target_date):
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.command("director")
+def director_cmd():
+    """Run the autonomous director loop."""
+    asyncio.run(_director())
+
+
+async def _director():
+    from voulezvous.services.director import run_director_loop
+    await run_director_loop()

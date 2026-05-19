@@ -246,3 +246,26 @@ class DailyReport(Base, UUIDPrimaryKey):
     )
 
     __table_args__ = (UniqueConstraint("report_date", name="uq_daily_reports_date"),)
+
+
+class DirectorRun(Base, UUIDPrimaryKey):
+    __tablename__ = "director_runs"
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    state_snapshot: Mapped[dict] = mapped_column(JSONB, server_default="{}", nullable=False)
+    llm_response: Mapped[dict] = mapped_column(JSONB, server_default="{}", nullable=False)
+    action_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+class DirectorAction(Base, UUIDPrimaryKey):
+    __tablename__ = "director_actions"
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("director_runs.id"), nullable=False)
+    sequence_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    verb: Mapped[str] = mapped_column(String(50), nullable=False)
+    args: Mapped[dict] = mapped_column(JSONB, server_default="{}", nullable=False)
+    why: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

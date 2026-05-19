@@ -95,6 +95,28 @@ services:
         condition: service_completed_successfully
     logging: *default-logging
 
+
+
+  director:
+    build: .
+    command: app director
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/voulezvous
+      DATABASE_URL_SYNC: postgresql://postgres:postgres@db:5432/voulezvous
+      SPOOL_ROOT: ${SPOOL_ROOT:-/spool}
+      LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://192.168.5.2:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      DIRECTOR_INTERVAL_SEC: ${DIRECTOR_INTERVAL_SEC:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - spool:/spool
+      - browser_profiles:/spool/browser_profiles
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *default-logging
+
   # Acquisition subsystem — seed + orchestrator run
   acq-orchestrator:
     build: .

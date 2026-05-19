@@ -11,6 +11,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(item => {
     if (item.dataset.page === 'discovery') loadDiscovery();
     if (item.dataset.page === 'plans') loadPlans();
     if (item.dataset.page === 'dashboard') loadDashboard();
+    if (item.dataset.page === 'obs') loadObs();
   });
 });
 
@@ -677,3 +678,8 @@ async function streamStop() {
 
 // --- Init ---
 loadDashboard();
+
+
+async function loadObs(){ try { const data=await api("GET","/obs/snapshot"); document.getElementById("obsContent").innerHTML=`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`; } catch(e){ toast("Obs error: "+e.message,"error"); } }
+async function forceDirectorTick(){ try{ await api("POST","/director/tick"); toast("Rodada forçada"); await loadObs(); } catch(e){ toast("Tick error: "+e.message,"error"); }}
+setInterval(()=>{const el=document.getElementById("page-obs"); if(el && el.style.display!=="none") loadObs();},10000);
