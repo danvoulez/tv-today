@@ -223,7 +223,6 @@ async def _acq_reporter(report_date):
 @click.option("--date", "target_date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
 def orchestrator_cmd(action: str, target_date):
     """Run the full autonomous daily orchestration cycle."""
-    from datetime import date as date_type
 
     d = None
     if target_date:

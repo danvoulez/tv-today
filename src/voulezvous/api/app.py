@@ -5,17 +5,34 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from voulezvous.api.routers import assets, health, plans, prep, reports, stream
+from voulezvous.acquisition.api import (
+    bridge as acq_bridge,
+)
 from voulezvous.acquisition.api import (
     candidates as acq_candidates,
+)
+from voulezvous.acquisition.api import (
     discovery as acq_discovery,
+)
+from voulezvous.acquisition.api import (
     domain_policies as acq_domain_policies,
+)
+from voulezvous.acquisition.api import (
     enrichment as acq_enrichment,
+)
+from voulezvous.acquisition.api import (
     keywords as acq_keywords,
+)
+from voulezvous.acquisition.api import (
     lineups as acq_lineups,
+)
+from voulezvous.acquisition.api import (
     media_ir as acq_media_ir,
+)
+from voulezvous.acquisition.api import (
     reports as acq_reports,
 )
+from voulezvous.api.routers import assets, health, plans, prep, reports, stream
 from voulezvous.config import settings
 from voulezvous.logging_config import setup_logging
 
@@ -49,6 +66,7 @@ app.include_router(acq_enrichment.router)
 app.include_router(acq_lineups.router)
 app.include_router(acq_media_ir.router)
 app.include_router(acq_reports.router, prefix="/acq")
+app.include_router(acq_bridge.router)
 
 
 @app.get("/", response_class=HTMLResponse)

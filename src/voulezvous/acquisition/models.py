@@ -123,6 +123,9 @@ class CandidateAsset(Base, UUIDPrimaryKey, TimestampMixin):
         nullable=False,
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    library_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("library_assets.id"), nullable=True
+    )
 
     discovery_run: Mapped["DiscoveryRun | None"] = relationship(back_populates="candidates")
     retrieval_adapter: Mapped["RetrievalAdapter | None"] = relationship(
@@ -187,6 +190,9 @@ class LineupRun(Base, UUIDPrimaryKey, TimestampMixin):
         nullable=False,
     )
     context_summary: Mapped[dict] = mapped_column(JSONB, server_default="{}", nullable=False)
+    stream_plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("stream_plans.id"), nullable=True
+    )
 
     items: Mapped[list["LineupItem"]] = relationship(
         back_populates="lineup_run",
