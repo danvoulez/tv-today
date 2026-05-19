@@ -19,6 +19,7 @@
     <a class="nav-item" data-page="discovery">Discovery</a>
     <a class="nav-item" data-page="plans">Plans</a>
     <a class="nav-item" data-page="reports">Reports</a>
+    <a class="nav-item" data-page="obs">Observabilidade</a>
     <a class="nav-item" href="/" target="_blank">Open Player ↗</a>
   </nav>
 
@@ -200,6 +201,11 @@
           <div class="empty-state"><p>Select a date to view a report</p></div>
         </div>
       </div>
+    </section>
+
+    <section id="page-obs" style="display:none">
+      <div class="page-header"><h2>Observabilidade</h2><button class="btn btn-primary" onclick="forceDirectorTick()">Forçar rodada</button></div>
+      <div class="card" id="obsContent">Loading...</div>
     </section>
   </main>
 </div>

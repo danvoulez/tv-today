@@ -110,28 +110,6 @@ async def _reporter(report_date: date):
 # ==========================================================================
 
 
-@cli.command("seed-acquisition-data")
-def seed_acquisition_data_cmd():
-    """Seed demo data for the acquisition subsystem."""
-    asyncio.run(_seed_acquisition())
-
-
-async def _seed_acquisition():
-    from voulezvous.acquisition.seed import seed_acquisition_data
-    from voulezvous.database import async_session
-
-    async with async_session() as db:
-        result = await seed_acquisition_data(db)
-        click.echo(f"Acquisition seed: {result}")
-
-
-@cli.command("discovery-worker")
-@click.argument("action", type=click.Choice(["run"]))
-def discovery_worker_cmd(action: str):
-    """Run a discovery cycle (simulated for demo)."""
-    asyncio.run(_discovery_worker())
-
-
 async def _discovery_worker():
     from voulezvous.acquisition.workers.discovery import run_discovery_simulated
     from voulezvous.database import async_session
@@ -241,3 +219,14 @@ async def _orchestrator(target_date):
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.command("director")
+def director_cmd():
+    """Run the autonomous director loop."""
+    asyncio.run(_director())
+
+
+async def _director():
+    from voulezvous.services.director import run_director_loop
+    await run_director_loop()

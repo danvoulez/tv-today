@@ -89,7 +89,7 @@ async def run_discovery(db: AsyncSession, run_date: date | None = None) -> Disco
     for policy in policies:
         try:
             await browser.launch(profile_name=policy.session_profile_name)
-            adapter = get_adapter_for_domain(policy.domain)
+            adapter = await get_adapter_for_domain(policy.domain, db)
 
             page_count = 0
             for keyword, weight in include_terms:
@@ -97,7 +97,7 @@ async def run_discovery(db: AsyncSession, run_date: date | None = None) -> Disco
                     break
 
                 # Search on the domain
-                search_url = adapter.build_search_url(policy.domain, keyword)
+                search_url = adapter.build_search_url(keyword)
                 if not search_url:
                     continue
 
@@ -271,7 +271,7 @@ async def run_discovery_simulated(db: AsyncSession, run_date: date | None = None
     total_metadata_only = 0
 
     for policy in policies:
-        adapter = get_adapter_for_domain(policy.domain)
+        adapter = await get_adapter_for_domain(policy.domain, db)
 
         for kw in include_kws:
             if any(exc in kw.keyword.lower() for exc in exclude_terms):

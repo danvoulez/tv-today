@@ -84,3 +84,15 @@ async def seed_demo_data(db: AsyncSession) -> dict:
     await db.commit()
     logger.info("seed_complete", created=created)
     return created
+
+
+from voulezvous.services.ffmpeg import run_ffmpeg
+from voulezvous.config import settings
+
+async def ensure_fallback():
+    fb=settings.fallback_video_path
+    fb.parent.mkdir(parents=True, exist_ok=True)
+    if fb.exists(): return
+    args=["-f","lavfi","-i","color=c=black:s=1920x1080:d=30","-f","lavfi","-i","sine=f=440:b=4:duration=30","-c:v","libx264","-c:a","aac","-shortest","-y",str(fb)]
+    rc,_,err=await run_ffmpeg(args)
+    if rc!=0: raise RuntimeError(err[-500:])

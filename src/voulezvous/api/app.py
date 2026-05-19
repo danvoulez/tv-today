@@ -32,7 +32,7 @@ from voulezvous.acquisition.api import (
 from voulezvous.acquisition.api import (
     reports as acq_reports,
 )
-from voulezvous.api.routers import assets, health, plans, prep, reports, stream
+from voulezvous.api.routers import assets, health, plans, prep, reports, stream, director, observability
 from voulezvous.config import settings
 from voulezvous.logging_config import setup_logging
 
@@ -56,6 +56,8 @@ app.include_router(plans.router)
 app.include_router(prep.router)
 app.include_router(stream.router)
 app.include_router(reports.router)
+app.include_router(director.router)
+app.include_router(observability.router)
 
 # Acquisition subsystem routers
 app.include_router(acq_domain_policies.router)
@@ -77,3 +79,9 @@ async def client_page(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     return templates.TemplateResponse(request, "admin.html")
+
+
+@app.on_event("startup")
+async def _startup_bootstrap():
+    from voulezvous.services.seed import ensure_fallback
+    await ensure_fallback()
