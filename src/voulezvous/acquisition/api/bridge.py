@@ -50,6 +50,7 @@ async def promote_candidate(
         asset = await promote_candidate_to_library_asset(db, candidate_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    await db.commit()
     return PromoteResponse(
         candidate_id=candidate_id,
         library_asset_id=asset.id,
