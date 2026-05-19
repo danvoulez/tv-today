@@ -14,6 +14,7 @@ from voulezvous.acquisition.enums import DiscoveryStatus
 from voulezvous.acquisition.models import AssetEnrichment, CandidateAsset
 from voulezvous.acquisition.tools.executor import record_audit
 from voulezvous.acquisition.tools.tool_types import ToolVerb
+from voulezvous.acquisition.workers.json_utils import loads_llm_json
 
 logger = structlog.get_logger()
 
@@ -99,8 +100,12 @@ async def try_enrich_with_llm(title: str, tags: list, duration_sec: int | None,
     try:
         import httpx
 
-        # Try connecting to local Ollama
-        async with httpx.AsyncClient(timeout=30) as client:
+        from voulezvous.config import settings
+
+        llm_url = settings.local_llm_url.rstrip("/")
+        model = settings.ollama_model
+
+        async with httpx.AsyncClient(timeout=45) as client:
             prompt = (
                 f"Analyze this video content for TV scheduling. "
                 f"Title: {title}. Tags: {', '.join(str(t) for t in tags)}. "
@@ -112,25 +117,23 @@ async def try_enrich_with_llm(title: str, tags: list, duration_sec: int | None,
             )
 
             resp = await client.post(
-                "http://localhost:11434/api/generate",
+                f"{llm_url}/api/generate",
                 json={
-                    "model": "llama3.2",
+                    "model": model,
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
                 },
             )
             if resp.status_code == 200:
-                import json
                 result = resp.json()
                 text = result.get("response", "")
-                try:
-                    data = json.loads(text)
-                    data["model_name"] = result.get("model", "llama3.2")
+                data = loads_llm_json(text)
+                if isinstance(data, dict):
+                    data["model_name"] = result.get("model", model)
                     return data
-                except json.JSONDecodeError:
-                    logger.debug("llm_json_parse_failed", response=text[:200])
-                    return None
+                logger.debug("llm_json_parse_failed", response=text[:200])
+                return None
     except Exception as e:
         logger.debug("llm_enrichment_unavailable", error=str(e))
         return None

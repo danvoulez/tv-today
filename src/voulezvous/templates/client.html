@@ -12,6 +12,11 @@
   <div class="player-container">
     <div class="video-wrapper">
       <video id="player" playsinline></video>
+      <div class="signal-panel" id="signalPanel">
+        <div class="signal-kicker">tv.logline.world</div>
+        <div class="signal-title" id="signalTitle">Connecting to LAB 8GB</div>
+        <div class="signal-detail" id="signalDetail">Preparing live HLS...</div>
+      </div>
       <div class="play-overlay" id="playOverlay">
         <div class="play-btn">
           <svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg>
@@ -35,12 +40,27 @@
     const overlay = document.getElementById('playOverlay');
     const titleEl = document.getElementById('nowPlayingTitle');
     const statusDot = document.getElementById('statusDot');
+    const signalPanel = document.getElementById('signalPanel');
+    const signalTitle = document.getElementById('signalTitle');
+    const signalDetail = document.getElementById('signalDetail');
 
     const HLS_URL = '/hls/stream.m3u8';
     let hls = null;
+    let started = false;
+
+    function setSignal(title, detail, live = false) {
+      signalTitle.textContent = title;
+      signalDetail.textContent = detail;
+      statusDot.className = live ? 'status-dot live' : 'status-dot offline';
+      titleEl.textContent = title;
+    }
 
     function initPlayer() {
-      if (Hls.isSupported()) {
+      if (started) return;
+      started = true;
+      setSignal('Loading live stream', 'Fetching HLS playlist from LAB 8GB...', true);
+
+      if (window.Hls && Hls.isSupported()) {
         hls = new Hls({
           liveSyncDurationCount: 3,
           liveMaxLatencyDurationCount: 6,
@@ -49,18 +69,32 @@
         hls.loadSource(HLS_URL);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {});
+          setSignal('Live', 'Connected via Cloudflare Tunnel to LAB 8GB.', true);
+          signalPanel.classList.add('hidden');
+          video.play().catch(() => {
+            overlay.classList.remove('hidden');
+            setSignal('Tap to start', 'Browser requires a tap before playback.', true);
+          });
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
-            statusDot.className = 'status-dot offline';
-            titleEl.textContent = 'Stream offline — retrying...';
-            setTimeout(() => { hls.loadSource(HLS_URL); }, 5000);
+            setSignal('Stream reconnecting', 'Waiting for fresh HLS segments...', false);
+            signalPanel.classList.remove('hidden');
+            setTimeout(() => {
+              hls.startLoad(-1);
+              hls.loadSource(HLS_URL);
+            }, 3000);
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = HLS_URL;
-        video.addEventListener('loadedmetadata', () => { video.play(); });
+        video.addEventListener('loadedmetadata', () => {
+          setSignal('Live', 'Connected via Cloudflare Tunnel to LAB 8GB.', true);
+          signalPanel.classList.add('hidden');
+          video.play();
+        });
+      } else {
+        setSignal('Player unavailable', 'This browser cannot play HLS and hls.js did not load.', false);
       }
     }
 
@@ -75,11 +109,10 @@
         const res = await fetch('/stream/status');
         const data = await res.json();
         if (data.running) {
-          statusDot.className = 'status-dot live';
-          titleEl.textContent = 'Live';
+          const label = data.status === 'fallback' ? 'Live fallback' : 'Live';
+          setSignal(label, 'Hosted on LAB 8GB.', true);
         } else {
-          statusDot.className = 'status-dot offline';
-          titleEl.textContent = 'Off air';
+          setSignal('Off air', 'Streamer is stopped on LAB 8GB.', false);
         }
       } catch { /* ignore */ }
     }

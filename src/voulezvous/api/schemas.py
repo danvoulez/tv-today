@@ -57,6 +57,11 @@ class AssetOut(BaseModel):
     last_downloaded_at: datetime | None
     last_streamed_at: datetime | None
     times_streamed: int
+    # Ficha de performance — acumulada a cada play
+    health_score: float = 1.0
+    error_count: int = 0
+    last_play_status: str | None = None
+    play_log: list = Field(default_factory=list)
     current_local_path: str | None
     current_local_size_bytes: int | None
     checksum: str | None

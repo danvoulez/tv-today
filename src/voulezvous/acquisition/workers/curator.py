@@ -41,6 +41,7 @@ from voulezvous.acquisition.models import (
     LineupItem,
     LineupRun,
 )
+from voulezvous.acquisition.workers.json_utils import loads_llm_json
 
 logger = structlog.get_logger()
 
@@ -141,6 +142,8 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
     sequence = 0
     usage_count: dict[uuid.UUID, int] = {}
     last_used_at: dict[uuid.UUID, int] = {}
+    previous_asset_id: uuid.UUID | None = None
+    overflow_repeats_used = False
 
     start_time = datetime(lineup_date.year, lineup_date.month, lineup_date.day,
                           0, 0, 0, tzinfo=timezone.utc)
@@ -148,20 +151,23 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
     while filled_sec < target_sec and shelf:
         current_hour = (filled_sec // 3600) % 24
 
-        # Insert buffer periodically
+        # Insert buffer periodically — only if a real bumper asset exists
+        # (shortest asset on shelf as stand-in; skipped by bridge emit)
         if sequence > 0 and sequence % BUFFER_EVERY_N_SLOTS == 0:
-            buffer_item = LineupItem(
-                lineup_run_id=lineup.id,
-                sequence_index=sequence,
-                candidate_asset_id=shelf[0].id,  # placeholder
-                target_start_at=start_time + timedelta(seconds=filled_sec),
-                target_end_at=start_time + timedelta(seconds=filled_sec + BUFFER_DURATION_SEC),
-                slot_type=SlotType.buffer,
-                decision_reason="Periodic buffer insertion",
-            )
-            db.add(buffer_item)
-            filled_sec += BUFFER_DURATION_SEC
-            sequence += 1
+            bumper = min(shelf, key=lambda c: c.duration_sec or 9999)
+            if bumper.duration_sec and bumper.duration_sec <= 60:
+                buffer_item = LineupItem(
+                    lineup_run_id=lineup.id,
+                    sequence_index=sequence,
+                    candidate_asset_id=bumper.id,
+                    target_start_at=start_time + timedelta(seconds=filled_sec),
+                    target_end_at=start_time + timedelta(seconds=filled_sec + (bumper.duration_sec or BUFFER_DURATION_SEC)),
+                    slot_type=SlotType.buffer,
+                    decision_reason="Periodic buffer insertion",
+                )
+                db.add(buffer_item)
+                filled_sec += bumper.duration_sec or BUFFER_DURATION_SEC
+                sequence += 1
 
         # Score and select best candidate
         scored = []
@@ -178,11 +184,21 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
             scored.append((s, c))
 
         if not scored:
-            # Reset cooldowns if stuck
+            # Controlled degradation: a 24h channel must either fill the target
+            # or explicitly report that it relaxed the daily repetition cap.
+            # Do not silently emit a 2h lineup for a 24h request.
+            overflow_repeats_used = True
             last_used_at.clear()
-            scored = [(1.0, c) for c in shelf if usage_count.get(c.id, 0) < MAX_REPEATS_PER_DAY]
+            scored = [
+                (0.10 if c.id != previous_asset_id else 0.01, c)
+                for c in shelf
+                if c.id != previous_asset_id or len(shelf) == 1
+            ]
             if not scored:
-                break
+                raise RuntimeError(
+                    "Lineup generation stalled: no candidates available even after "
+                    "repeat-overflow relaxation"
+                )
 
         scored.sort(key=lambda x: -x[0])
         _, chosen = scored[0]
@@ -200,6 +216,11 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
                 hints = enrichment.music_pairing_hints
                 music_ref = hints[0] if isinstance(hints, list) and hints else None
 
+        repeat_mode = (
+            "repeat_overflow"
+            if usage_count.get(chosen.id, 0) >= MAX_REPEATS_PER_DAY
+            else "strict"
+        )
         item = LineupItem(
             lineup_run_id=lineup.id,
             sequence_index=sequence,
@@ -210,7 +231,7 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
             music_asset_ref=str(music_ref) if music_ref else None,
             decision_reason=(
                 f"Score {scored[0][0]:.2f}, hour={current_hour}, "
-                f"slot={_get_time_slot(current_hour)}"
+                f"slot={_get_time_slot(current_hour)}, mode={repeat_mode}"
             ),
         )
         db.add(item)
@@ -218,9 +239,11 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
         filled_sec += dur
         usage_count[chosen.id] = usage_count.get(chosen.id, 0) + 1
         last_used_at[chosen.id] = sequence
+        previous_asset_id = chosen.id
         sequence += 1
 
     # Add fallback reserves
+    fallback_count = 0
     for i in range(FALLBACK_RESERVE_COUNT):
         if shelf:
             fb = shelf[i % len(shelf)]
@@ -232,10 +255,20 @@ async def generate_lineup(db: AsyncSession, lineup_date: date,
                 decision_reason="Fallback reserve",
             )
             db.add(item)
+            fallback_count += 1
 
-    lineup.context_summary["total_items"] = sequence
-    lineup.context_summary["total_duration_sec"] = filled_sec
-    lineup.context_summary["total_duration_hours"] = round(filled_sec / 3600, 2)
+    lineup.context_summary = {
+        **(lineup.context_summary or {}),
+        "total_items": sequence + fallback_count,
+        "main_and_buffer_items": sequence,
+        "fallback_reserve_items": fallback_count,
+        "total_duration_sec": filled_sec,
+        "total_duration_hours": round(filled_sec / 3600, 2),
+        "target_duration_sec": target_sec,
+        "target_filled": filled_sec >= target_sec,
+        "overflow_repeats_used": overflow_repeats_used,
+        "max_repeats_per_day": MAX_REPEATS_PER_DAY,
+    }
 
     await db.commit()
     await db.refresh(lineup)
@@ -333,9 +366,8 @@ async def _try_llm_polish(items: list[LineupItem]) -> list[dict]:
                 },
             )
             if resp.status_code == 200:
-                import json
                 result = resp.json()
-                data = json.loads(result.get("response", "[]"))
+                data = loads_llm_json(result.get("response", "[]"), default=[])
                 if isinstance(data, list):
                     return data[:5]  # Cap at 5 suggestions
         return []

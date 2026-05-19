@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -121,8 +122,25 @@ async def promote_candidate_to_library_asset(
         rights_status=RightsStatus.approved_for_stream,
         status=AssetStatus.approved,
     )
-    db.add(asset)
-    await db.flush()
+
+    try:
+        async with db.begin_nested():
+            db.add(asset)
+            await db.flush()
+    except IntegrityError:
+        existing_after_race = (await db.execute(
+            select(LibraryAsset).where(LibraryAsset.source_url == candidate.source_url)
+        )).scalar_one_or_none()
+        if existing_after_race is None:
+            raise
+        candidate.library_asset_id = existing_after_race.id
+        await db.flush()
+        logger.info(
+            "candidate_promoted_dedup_after_integrity_error",
+            candidate_id=str(candidate_id),
+            library_asset_id=str(existing_after_race.id),
+        )
+        return existing_after_race
 
     candidate.library_asset_id = asset.id
     await db.flush()
@@ -220,14 +238,6 @@ async def emit_lineup_to_stream_plan(
             duration_sec = int(
                 (item.target_end_at - item.target_start_at).total_seconds()
             )
-            if duration_sec <= 0:
-                logger.warning(
-                    "lineup_item_skip_invalid_duration",
-                    lineup_item_id=str(item.id),
-                    duration_sec=duration_sec,
-                )
-                skipped_count += 1
-                continue
         if not duration_sec and library_asset.duration_sec:
             duration_sec = library_asset.duration_sec
 

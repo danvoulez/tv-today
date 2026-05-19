@@ -197,3 +197,133 @@ class BrowserRuntime:
             return text[:max_length]
         except Exception:
             return ""
+
+    async def login(
+        self,
+        login_url: str,
+        email: str,
+        password: str,
+        email_selector: str = "input[type='email'], input[name='email'], input[name='username'], input[name='login']",
+        pass_selector: str = "input[type='password']",
+        submit_selector: str = "button[type='submit'], input[type='submit'], button.login-btn, button.submit",
+        success_check: str | None = None,
+    ) -> dict:
+        """Login to a site and persist the session via profile.
+
+        Returns {"success": True} if login appears to have worked.
+        Uses persisted profile — on subsequent calls, already logged-in session is reused.
+        """
+        if not self._page:
+            return {"success": False, "error": "Browser not launched"}
+
+        # Check if already logged in by looking for a logged-in indicator
+        if success_check:
+            try:
+                await self._page.wait_for_selector(success_check, timeout=3000)
+                logger.info("login_already_active", url=login_url)
+                return {"success": True, "already_logged_in": True}
+            except Exception:
+                pass  # Not logged in yet, proceed
+
+        result = await self.navigate(login_url)
+        if not result.get("success"):
+            return {"success": False, "error": f"Could not navigate to {login_url}"}
+
+        # Wait a moment for JS to render
+        await asyncio.sleep(2)
+
+        try:
+            await self._page.wait_for_selector(email_selector, timeout=8000)
+            await self._page.fill(email_selector, email)
+            await asyncio.sleep(0.5)
+            await self._page.fill(pass_selector, password)
+            await asyncio.sleep(0.5)
+            await self._page.click(submit_selector)
+            await self._page.wait_for_load_state("domcontentloaded", timeout=15000)
+            await asyncio.sleep(2)
+
+            # Verify login worked
+            current_url = self._page.url
+            page_text = await self.get_page_text(500)
+            failed_signals = ["wrong password", "incorrect", "invalid", "login failed", "error"]
+            failed = any(s in page_text.lower() for s in failed_signals)
+
+            if failed:
+                logger.warning("login_failed", url=login_url, hint=page_text[:100])
+                return {"success": False, "error": "Login credentials rejected", "page": page_text[:200]}
+
+            logger.info("login_success", url=login_url, landed_on=current_url)
+            return {"success": True, "landed_on": current_url}
+
+        except Exception as e:
+            logger.error("login_error", url=login_url, error=str(e))
+            return {"success": False, "error": str(e)}
+
+    async def intercept_media_requests(self) -> list[str]:
+        """Capture media/download URLs triggered during page interaction.
+
+        Sets up a request listener, plays the video briefly, returns captured URLs.
+        """
+        if not self._page:
+            return []
+
+        captured: list[str] = []
+        media_exts = (".mp4", ".m3u8", ".mpd", ".webm", ".flv", ".ts")
+        media_keywords = ("download", "get_file", "dl=", "cdn", "media")
+
+        def handle_request(request):
+            url = request.url
+            if any(url.lower().endswith(ext) for ext in media_exts):
+                captured.append(url)
+            elif any(kw in url.lower() for kw in media_keywords) and "video" in url.lower():
+                captured.append(url)
+
+        self._page.on("request", handle_request)
+
+        try:
+            # Trigger video load by clicking play button if present
+            await self._page.evaluate("""() => {
+                const playBtns = document.querySelectorAll(
+                    '.play-button, .play-btn, button.play, [class*="play"], [id*="play"]'
+                );
+                if (playBtns.length) playBtns[0].click();
+                const videos = document.querySelectorAll('video');
+                videos.forEach(v => v.play().catch(() => {}));
+            }""")
+            await asyncio.sleep(4)
+        except Exception:
+            pass
+        finally:
+            self._page.remove_listener("request", handle_request)
+
+        return list(set(captured))
+
+    async def click_download_button(self) -> str | None:
+        """Click the download button on a video page and return the download URL."""
+        if not self._page:
+            return None
+
+        download_selectors = [
+            "a.download-btn", "a[download]", "a[href*='download']",
+            "button.download", ".download-link a", "a[id*='download']",
+            "a[class*='download']", ".dl-btn", "a.btn-download",
+        ]
+
+        for selector in download_selectors:
+            try:
+                el = await self._page.query_selector(selector)
+                if el:
+                    href = await el.get_attribute("href")
+                    if href and any(
+                        href.lower().endswith(ext) for ext in (".mp4", ".webm", ".flv")
+                    ):
+                        return href
+
+                    # Click and wait for navigation or new URL
+                    async with self._page.expect_navigation(timeout=5000):
+                        await el.click()
+                    return self._page.url
+            except Exception:
+                continue
+
+        return None

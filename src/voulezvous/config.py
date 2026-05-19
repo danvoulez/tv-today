@@ -38,6 +38,23 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # ── Local LLM (Ollama) ────────────────────────────────────────────────────
+    local_llm_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "llama3.2"
+
+    # ── Adult platform credentials (stored only in .env, never in git) ────────
+    xvideos_email: str = ""
+    xvideos_password: str = ""
+    pornhub_email: str = ""
+    pornhub_password: str = ""
+    gayboyfriendtv_email: str = ""
+    gayboyfriendtv_password: str = ""
+    fabhuse_email: str = ""
+    fabhuse_password: str = ""
+
+    # Username/channel to follow when no keyword search is configured
+    adult_follow_user: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     @property

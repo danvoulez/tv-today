@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>voulezvous — admin</title>
-  <link rel="stylesheet" href="/static/css/admin.css">
+  <link rel="stylesheet" href="/static/css/admin.css?v=20260519-discovery">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -16,6 +16,7 @@
     </div>
     <a class="nav-item active" data-page="dashboard">Dashboard</a>
     <a class="nav-item" data-page="assets">Assets</a>
+    <a class="nav-item" data-page="discovery">Discovery</a>
     <a class="nav-item" data-page="plans">Plans</a>
     <a class="nav-item" data-page="reports">Reports</a>
     <a class="nav-item" href="/" target="_blank">Open Player ↗</a>
@@ -64,6 +65,116 @@
           </select>
         </div>
         <div class="table-wrap" id="assetsTable"></div>
+      </div>
+    </section>
+
+    <!-- Discovery -->
+    <section id="page-discovery" style="display:none">
+      <div class="page-header">
+        <div>
+          <h2>Discovery</h2>
+          <p class="page-subtitle">Tell the channel what to look for, where to search, then promote good finds into the video library.</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="loadDiscovery()">Refresh</button>
+          <button class="btn btn-primary" onclick="runDiscovery(false)">Run Search</button>
+        </div>
+      </div>
+
+      <div class="discovery-layout">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Search Keywords</span>
+            <span class="badge badge-blue" id="keywordCount">0</span>
+          </div>
+          <div class="form-group">
+            <label>Keyword or phrase</label>
+            <input class="form-control" id="keywordText" placeholder="archive film nightlife">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Category</label>
+              <input class="form-control" id="keywordCategory" placeholder="music, film, ambient">
+            </div>
+            <div class="form-group">
+              <label>Weight</label>
+              <input class="form-control" id="keywordWeight" type="number" value="1" min="0.1" max="10" step="0.1">
+            </div>
+          </div>
+          <div class="segmented">
+            <label><input type="radio" name="keywordInclude" value="true" checked> Include</label>
+            <label><input type="radio" name="keywordInclude" value="false"> Exclude</label>
+          </div>
+          <button class="btn btn-primary full-width" onclick="createKeyword()">Add Keyword</button>
+          <div class="list-panel" id="keywordsList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Search Domains</span>
+            <span class="badge badge-blue" id="domainCount">0</span>
+          </div>
+          <div class="form-group">
+            <label>Domain</label>
+            <input class="form-control" id="domainName" placeholder="archive.org">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Max pages</label>
+              <input class="form-control" id="domainPages" type="number" value="5" min="1" max="20">
+            </div>
+            <div class="form-group">
+              <label>Mode</label>
+              <select class="form-control" id="domainMode">
+                <option value="keyword_search">Keyword search</option>
+              </select>
+            </div>
+          </div>
+          <label class="check-row">
+            <input type="checkbox" id="domainEnabled" checked>
+            Enabled for discovery
+          </label>
+          <button class="btn btn-primary full-width" onclick="createDomainPolicy()">Add Domain</button>
+          <div class="quick-domains">
+            <button class="btn btn-secondary btn-sm" onclick="presetDomain('archive.org')">archive.org</button>
+            <button class="btn btn-secondary btn-sm" onclick="presetDomain('vimeo.com')">vimeo.com</button>
+            <button class="btn btn-secondary btn-sm" onclick="presetDomain('pexels.com')">pexels.com</button>
+          </div>
+          <div class="list-panel" id="domainsList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Discovery Runs</span>
+          <div class="header-actions">
+            <button class="btn btn-secondary btn-sm" onclick="runDiscovery(true)">Test Mode</button>
+            <button class="btn btn-primary btn-sm" onclick="runDiscovery(false)">Run Real Search</button>
+          </div>
+        </div>
+        <div id="discoveryRuns"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Candidates</span>
+          <div class="header-actions">
+            <select class="form-control compact-control" id="candidateRetrievalFilter" onchange="loadCandidates()">
+              <option value="">All retrieval</option>
+              <option value="authorized_direct">Downloadable</option>
+              <option value="authorized_official">Official</option>
+              <option value="metadata_only">Metadata only</option>
+              <option value="blocked">Blocked</option>
+            </select>
+            <select class="form-control compact-control" id="candidateRightsFilter" onchange="loadCandidates()">
+              <option value="">All rights</option>
+              <option value="pending_review">Pending</option>
+              <option value="approved_for_stream">Approved</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" id="candidatesTable"></div>
       </div>
     </section>
 
@@ -169,6 +280,6 @@
 
 <div class="toast-container" id="toasts"></div>
 
-<script src="/static/js/admin.js"></script>
+<script src="/static/js/admin.js?v=20260519-discovery2"></script>
 </body>
 </html>

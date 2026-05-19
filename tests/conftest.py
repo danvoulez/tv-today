@@ -10,6 +10,7 @@ from voulezvous.models.tables import (  # noqa: F401
     DailyReport,
     LibraryAsset,
     PrepJob,
+    StreamControl,
     StreamEvent,
     StreamPlan,
     StreamPlanItem,

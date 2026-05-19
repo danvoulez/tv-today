@@ -39,6 +39,50 @@ html, body {
   background: #1a1a1a;
 }
 
+.signal-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(255, 20, 147, 0.16), transparent 45%),
+    linear-gradient(315deg, rgba(0, 200, 255, 0.12), transparent 50%),
+    #121212;
+  z-index: 4;
+  transition: opacity 0.25s ease;
+}
+
+.signal-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.signal-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  color: #FF1493;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.signal-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.signal-detail {
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #b8b8b8;
+}
+
 .play-overlay {
   position: absolute;
   inset: 0;
@@ -47,7 +91,7 @@ html, body {
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.18);
   transition: opacity 0.3s ease;
 }
 
@@ -119,7 +163,7 @@ html, body {
   background: linear-gradient(transparent, rgba(0,0,0,0.8));
   font-size: 13px;
   color: #ccc;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }

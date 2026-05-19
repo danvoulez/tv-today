@@ -88,9 +88,20 @@ async def generate_plan(
     sequence = 0
     last_video_id = None
 
-    # Shuffle to provide variety, avoid immediate repeats
-    shuffled_videos = list(video_assets)
-    random.shuffle(shuffled_videos)
+    # Ordena por health_score desc (assets saudáveis primeiro), depois shuffle dentro de faixas
+    # Assets com health_score < 0.3 são excluídos temporariamente (muitos erros consecutivos)
+    healthy_videos = [v for v in video_assets if float(v.health_score or 1.0) >= 0.3]
+    quarantined = [v for v in video_assets if float(v.health_score or 1.0) < 0.3]
+    if quarantined:
+        logger.info(
+            "planner_quarantined_assets",
+            count=len(quarantined),
+            titles=[v.title for v in quarantined],
+        )
+    # Fallback: se não sobrou nada saudável, usa tudo mesmo assim
+    video_pool = healthy_videos if healthy_videos else video_assets
+    shuffled_videos = sorted(video_pool, key=lambda v: -float(v.health_score or 1.0))
+    random.shuffle(shuffled_videos)  # shuffle leve para não ficar sempre na mesma ordem
     video_idx = 0
 
     while filled_seconds < target_seconds:

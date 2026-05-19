@@ -8,6 +8,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(item => {
     document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
     document.getElementById('page-' + item.dataset.page).style.display = '';
     if (item.dataset.page === 'assets') loadAssets();
+    if (item.dataset.page === 'discovery') loadDiscovery();
     if (item.dataset.page === 'plans') loadPlans();
     if (item.dataset.page === 'dashboard') loadDashboard();
   });
@@ -37,6 +38,15 @@ function badge(text, color) {
   return `<span class="badge badge-${color}">${text}</span>`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function rightsBadge(status) {
   if (status === 'approved_for_stream') return badge('approved', 'green');
   if (status === 'blocked') return badge('blocked', 'red');
@@ -50,6 +60,10 @@ function statusBadge(status) {
     draft: 'yellow', preparing: 'blue', ready: 'green',
     streaming: 'pink', completed: 'green', failed: 'red',
     queued: 'grey', skipped: 'yellow',
+    found: 'blue', inspected: 'yellow', accepted: 'green', rejected: 'red',
+    authorized_direct: 'green', authorized_official: 'green', metadata_only: 'yellow',
+    unavailable: 'red', none: 'grey', blocked: 'red',
+    pending_review: 'yellow', approved_for_stream: 'green',
   };
   return badge(status, colors[status] || 'grey');
 }
@@ -193,6 +207,281 @@ async function createAsset() {
     loadAssets();
     loadDashboard();
   } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// --- Discovery ---
+async function loadDiscovery() {
+  await Promise.all([
+    loadKeywords(),
+    loadDomainPolicies(),
+    loadDiscoveryRuns(),
+    loadCandidates(),
+  ]);
+}
+
+async function loadKeywords() {
+  try {
+    const keywords = await api('GET', '/keywords');
+    document.getElementById('keywordCount').textContent = keywords.length;
+    const active = keywords.filter(k => k.active);
+    const inactive = keywords.length - active.length;
+    let html = `
+      <div class="mini-summary">
+        <span>${active.length} active</span>
+        <span>${inactive} paused</span>
+      </div>
+    `;
+    if (!keywords.length) {
+      html += '<div class="empty-state compact"><p>No keywords yet</p></div>';
+    } else {
+      html += '<div class="stack-list">';
+      for (const k of keywords) {
+        html += `
+          <div class="stack-item">
+            <div>
+              <strong>${escapeHtml(k.keyword)}</strong>
+              <div class="muted">${escapeHtml(k.category || 'uncategorized')} · weight ${k.weight}</div>
+            </div>
+            <div class="inline-actions">
+              ${badge(k.include ? 'include' : 'exclude', k.include ? 'green' : 'red')}
+              ${badge(k.active ? 'active' : 'paused', k.active ? 'blue' : 'grey')}
+              <button class="btn btn-secondary btn-sm" onclick="toggleKeyword('${k.id}', ${!k.active})">${k.active ? 'Pause' : 'Enable'}</button>
+            </div>
+          </div>
+        `;
+      }
+      html += '</div>';
+    }
+    document.getElementById('keywordsList').innerHTML = html;
+  } catch (e) {
+    toast('Failed to load keywords: ' + e.message, 'error');
+  }
+}
+
+async function createKeyword() {
+  const keyword = document.getElementById('keywordText').value.trim();
+  if (!keyword) { toast('Keyword is required', 'error'); return; }
+  const include = document.querySelector('input[name="keywordInclude"]:checked').value === 'true';
+  const body = {
+    keyword,
+    category: document.getElementById('keywordCategory').value.trim() || null,
+    weight: parseFloat(document.getElementById('keywordWeight').value || '1'),
+    include,
+    active: true,
+  };
+  try {
+    await api('POST', '/keywords', body);
+    toast(include ? 'Keyword added' : 'Exclude term added');
+    document.getElementById('keywordText').value = '';
+    document.getElementById('keywordCategory').value = '';
+    document.getElementById('keywordWeight').value = '1';
+    loadKeywords();
+  } catch (e) {
+    toast('Keyword error: ' + e.message, 'error');
+  }
+}
+
+async function toggleKeyword(id, active) {
+  try {
+    await api('PATCH', '/keywords/' + id, { active });
+    toast(active ? 'Keyword enabled' : 'Keyword paused');
+    loadKeywords();
+  } catch (e) {
+    toast('Keyword error: ' + e.message, 'error');
+  }
+}
+
+async function loadDomainPolicies() {
+  try {
+    const domains = await api('GET', '/domain-policies');
+    document.getElementById('domainCount').textContent = domains.length;
+    let html = '';
+    if (!domains.length) {
+      html = '<div class="empty-state compact"><p>No search domains yet</p></div>';
+    } else {
+      html = '<div class="stack-list">';
+      for (const d of domains) {
+        html += `
+          <div class="stack-item">
+            <div>
+              <strong>${escapeHtml(d.domain)}</strong>
+              <div class="muted">${escapeHtml(d.search_mode)} · ${d.max_pages_per_run} pages/run</div>
+            </div>
+            <div class="inline-actions">
+              ${badge(d.is_enabled ? 'enabled' : 'off', d.is_enabled ? 'green' : 'grey')}
+              <button class="btn btn-secondary btn-sm" onclick="toggleDomain('${d.id}', ${!d.is_enabled})">${d.is_enabled ? 'Disable' : 'Enable'}</button>
+            </div>
+          </div>
+        `;
+      }
+      html += '</div>';
+    }
+    document.getElementById('domainsList').innerHTML = html;
+  } catch (e) {
+    toast('Failed to load domains: ' + e.message, 'error');
+  }
+}
+
+function presetDomain(domain) {
+  document.getElementById('domainName').value = domain;
+}
+
+async function createDomainPolicy() {
+  const domain = document.getElementById('domainName').value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!domain) { toast('Domain is required', 'error'); return; }
+  const body = {
+    domain,
+    is_enabled: document.getElementById('domainEnabled').checked,
+    search_mode: document.getElementById('domainMode').value,
+    retrieval_modes: ['official_download', 'direct_url'],
+    requires_playback_verification: false,
+    max_pages_per_run: parseInt(document.getElementById('domainPages').value || '5'),
+    notes: domain === 'archive.org' ? 'Public domain and downloadable media search' : 'Operator-approved discovery domain',
+  };
+  try {
+    await api('POST', '/domain-policies', body);
+    toast('Domain added');
+    document.getElementById('domainName').value = '';
+    loadDomainPolicies();
+  } catch (e) {
+    toast('Domain error: ' + e.message, 'error');
+  }
+}
+
+async function toggleDomain(id, isEnabled) {
+  try {
+    await api('PATCH', '/domain-policies/' + id, { is_enabled: isEnabled });
+    toast(isEnabled ? 'Domain enabled' : 'Domain disabled');
+    loadDomainPolicies();
+  } catch (e) {
+    toast('Domain error: ' + e.message, 'error');
+  }
+}
+
+async function runDiscovery(simulated) {
+  try {
+    toast(simulated ? 'Running test discovery...' : 'Running real discovery...');
+    const run = await api('POST', '/discovery/run' + (simulated ? '?simulated=true' : ''));
+    const found = run.output_summary?.total_found ?? 0;
+    const accepted = run.output_summary?.total_accepted ?? 0;
+    toast(`Discovery finished: ${found} found, ${accepted} downloadable`);
+    await Promise.all([loadDiscoveryRuns(), loadCandidates()]);
+  } catch (e) {
+    toast('Discovery error: ' + e.message, 'error');
+  }
+}
+
+async function loadDiscoveryRuns() {
+  try {
+    const runs = await api('GET', '/discovery/runs');
+    if (!runs.length) {
+      document.getElementById('discoveryRuns').innerHTML = '<div class="empty-state compact"><p>No discovery runs yet</p></div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Date</th><th>Status</th><th>Keywords</th><th>Found</th><th>Downloadable</th></tr></thead><tbody>';
+    for (const run of runs.slice(0, 8)) {
+      const input = run.input_summary || {};
+      const output = run.output_summary || {};
+      html += `
+        <tr>
+          <td>${escapeHtml(run.run_date)}</td>
+          <td>${statusBadge(run.status)}</td>
+          <td>${escapeHtml((input.include_keywords || []).slice(0, 4).join(', '))}</td>
+          <td>${output.total_found ?? 0}</td>
+          <td>${output.total_accepted ?? 0}</td>
+        </tr>
+      `;
+    }
+    html += '</tbody></table>';
+    document.getElementById('discoveryRuns').innerHTML = html;
+  } catch (e) {
+    toast('Failed to load discovery runs: ' + e.message, 'error');
+  }
+}
+
+async function loadCandidates() {
+  try {
+    const params = ['limit=100'];
+    const retrieval = document.getElementById('candidateRetrievalFilter')?.value;
+    const rights = document.getElementById('candidateRightsFilter')?.value;
+    if (retrieval) params.push('retrieval_status=' + encodeURIComponent(retrieval));
+    if (rights) params.push('rights_status=' + encodeURIComponent(rights));
+    const candidates = await api('GET', '/candidates?' + params.join('&'));
+    document.getElementById('candidatesTable').innerHTML = candidates.length
+      ? candidateTable(candidates)
+      : '<div class="empty-state"><p>No candidates yet. Add keywords and run a search.</p></div>';
+  } catch (e) {
+    toast('Failed to load candidates: ' + e.message, 'error');
+  }
+}
+
+function candidateTable(candidates) {
+  let html = '<table><thead><tr><th>Title</th><th>Retrieval</th><th>Rights</th><th>Discovery</th><th>Duration</th><th>Actions</th></tr></thead><tbody>';
+  for (const c of candidates) {
+    const url = c.source_url || c.page_url || '';
+    html += '<tr>';
+    html += `
+      <td>
+        <strong>${escapeHtml(c.title)}</strong>
+        <div class="muted url-text">${escapeHtml(url)}</div>
+      </td>
+    `;
+    html += `<td>${statusBadge(c.retrieval_status)}</td>`;
+    html += `<td>${rightsBadge(c.rights_status)}</td>`;
+    html += `<td>${statusBadge(c.discovery_status)}</td>`;
+    html += `<td>${c.duration_sec ? Math.round(c.duration_sec / 60) + 'm' : '-'}</td>`;
+    html += '<td><div class="inline-actions">';
+    if (c.rights_status !== 'approved_for_stream') {
+      html += `<button class="btn btn-primary btn-sm" onclick="approveCandidate('${c.id}')">Approve</button>`;
+    }
+    html += `<button class="btn btn-secondary btn-sm" onclick="promoteCandidate('${c.id}')">Promote</button>`;
+    html += `<button class="btn btn-danger btn-sm" onclick="blockCandidate('${c.id}')">Block</button>`;
+    html += '</div></td></tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+async function approveCandidate(id) {
+  try {
+    await approveCandidateRecord(id);
+    toast('Candidate approved');
+    loadCandidates();
+  } catch (e) {
+    toast('Candidate error: ' + e.message, 'error');
+  }
+}
+
+async function approveCandidateRecord(id) {
+  return api('PATCH', '/candidates/' + id, {
+    rights_status: 'approved_for_stream',
+    discovery_status: 'accepted',
+  });
+}
+
+async function blockCandidate(id) {
+  try {
+    await api('PATCH', '/candidates/' + id, {
+      rights_status: 'blocked',
+      discovery_status: 'rejected',
+      rejection_reason: 'Blocked by operator',
+    });
+    toast('Candidate blocked');
+    loadCandidates();
+  } catch (e) {
+    toast('Candidate error: ' + e.message, 'error');
+  }
+}
+
+async function promoteCandidate(id) {
+  try {
+    await approveCandidateRecord(id);
+    const promoted = await api('POST', '/acq/candidates/' + id + '/promote');
+    toast('Promoted to library: ' + promoted.title);
+    await Promise.all([loadCandidates(), loadAssets(), loadDashboard()]);
+  } catch (e) {
+    toast('Promote error: ' + e.message, 'error');
+  }
 }
 
 // --- Plans ---

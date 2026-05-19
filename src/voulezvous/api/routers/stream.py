@@ -1,32 +1,31 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from voulezvous.services.streamer import streamer_state
+from voulezvous.database import get_db
+from voulezvous.services.stream_control import (
+    request_stream_start,
+    request_stream_stop,
+    stream_status_payload,
+)
 
 router = APIRouter(prefix="/stream", tags=["stream"])
 
 
 @router.post("/start")
-async def stream_start():
-    if streamer_state.running:
-        return {"status": "already_running"}
-    streamer_state.request_start()
-    return {"status": "start_requested"}
+async def stream_start(db: AsyncSession = Depends(get_db)):
+    control = await request_stream_start(db)
+    return {"status": control.status, "desired_running": control.desired_running}
 
 
 @router.post("/stop")
-async def stream_stop():
-    streamer_state.request_stop()
-    return {"status": "stop_requested"}
+async def stream_stop(db: AsyncSession = Depends(get_db)):
+    control = await request_stream_stop(db)
+    return {"status": control.status, "desired_running": control.desired_running}
 
 
 @router.get("/status")
-async def stream_status():
-    return {
-        "running": streamer_state.running,
-        "current_item_id": str(streamer_state.current_item_id)
-        if streamer_state.current_item_id
-        else None,
-    }
+async def stream_status(db: AsyncSession = Depends(get_db)):
+    return await stream_status_payload(db)
 
 
 @router.post("/sync-r2")

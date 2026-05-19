@@ -36,6 +36,7 @@ from voulezvous.models.enums import (
 
 class LibraryAsset(Base, UUIDPrimaryKey, TimestampMixin):
     __tablename__ = "library_assets"
+    __table_args__ = (UniqueConstraint("source_url", name="uq_library_assets_source_url"),)
 
     kind: Mapped[AssetKind] = mapped_column(
         Enum(AssetKind, native_enum=False), nullable=False
@@ -70,6 +71,17 @@ class LibraryAsset(Base, UUIDPrimaryKey, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
     times_streamed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # 0.0 = sempre falha, 1.0 = sempre completa sem erros. Recalculado após cada play.
+    health_score: Mapped[float] = mapped_column(Numeric(4, 3), default=1.0, nullable=False)
+
+    # Último resultado: "ok" | "failed" | "skipped" | "partial"
+    last_play_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # Histórico de plays — cada entrada: {played_at, status, planned_sec, actual_sec, error}
+    # Ghost: viewer_count ausente — requer integração com API RTMP (YouTube/Twitch)
+    play_log: Mapped[list] = mapped_column(JSONB, server_default="[]", nullable=False)
 
     current_local_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     current_local_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -204,6 +216,20 @@ class StreamEvent(Base, UUIDPrimaryKey):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     payload: Mapped[dict] = mapped_column(JSONB, server_default="{}", nullable=False)
+
+
+class StreamControl(Base, TimestampMixin):
+    __tablename__ = "stream_control"
+
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    desired_running: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="idle", nullable=False)
+    current_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("stream_plan_items.id"), nullable=True
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class DailyReport(Base, UUIDPrimaryKey):

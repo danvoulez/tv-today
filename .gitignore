@@ -13,3 +13,7 @@ spool/tmp/
 spool/reports/
 *.mp4
 !spool/fallback/
+
+# Playwright MCP runtime logs
+.playwright-mcp/
+
