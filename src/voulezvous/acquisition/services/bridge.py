@@ -220,6 +220,14 @@ async def emit_lineup_to_stream_plan(
             duration_sec = int(
                 (item.target_end_at - item.target_start_at).total_seconds()
             )
+            if duration_sec <= 0:
+                logger.warning(
+                    "lineup_item_skip_invalid_duration",
+                    lineup_item_id=str(item.id),
+                    duration_sec=duration_sec,
+                )
+                skipped_count += 1
+                continue
         if not duration_sec and library_asset.duration_sec:
             duration_sec = library_asset.duration_sec
 
