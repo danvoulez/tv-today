@@ -236,12 +236,23 @@ async def generate_report(db: AsyncSession, report_date: date | None = None) -> 
 
     markdown_text = "\n".join(md_lines)
 
-    report = AutonomyReport(
-        report_date=report_date,
-        summary=summary,
-        markdown_text=markdown_text,
-    )
-    db.add(report)
+    # Upsert: update existing report for this date instead of duplicating
+    existing = (await db.execute(
+        select(AutonomyReport).where(AutonomyReport.report_date == report_date)
+    )).scalar_one_or_none()
+
+    if existing:
+        existing.summary = summary
+        existing.markdown_text = markdown_text
+        report = existing
+    else:
+        report = AutonomyReport(
+            report_date=report_date,
+            summary=summary,
+            markdown_text=markdown_text,
+        )
+        db.add(report)
+
     await db.commit()
     await db.refresh(report)
 
