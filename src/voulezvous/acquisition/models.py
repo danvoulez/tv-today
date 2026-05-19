@@ -51,6 +51,23 @@ class DomainPolicy(Base, UUIDPrimaryKey, TimestampMixin):
     max_pages_per_run: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    search_url_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_url_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    login_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    login_email_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    login_password_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    login_submit_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    login_success_selector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credential_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credential_password: Mapped[str | None] = mapped_column(Text, nullable=True)
+    accepted_extensions: Mapped[list] = mapped_column(JSONB, server_default='["mp4","webm","m3u8","mpd"]', nullable=False)
+    is_adult: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_login: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    needs_media_interception: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    title_suffix_strips: Mapped[list] = mapped_column(JSONB, server_default='[]', nullable=False)
+
 
 class SearchKeyword(Base, UUIDPrimaryKey, TimestampMixin):
     __tablename__ = "search_keywords"

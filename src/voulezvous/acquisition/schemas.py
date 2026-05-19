@@ -30,6 +30,38 @@ class DomainPolicyCreate(BaseModel):
     quality_floor: str | None = None
     max_pages_per_run: int = 5
     notes: str | None = None
+    search_url_template: str | None = None
+    user_url_template: str | None = None
+    result_selector: str | None = None
+    title_selector: str | None = None
+    login_url: str | None = None
+    login_email_selector: str | None = None
+    login_password_selector: str | None = Field(default=None, repr=False)
+    login_submit_selector: str | None = None
+    login_success_selector: str | None = None
+    credential_email: str | None = None
+    credential_password: str | None = Field(default=None, repr=False)
+    accepted_extensions: list[str] | None = None
+    is_adult: bool | None = None
+    requires_login: bool | None = None
+    needs_media_interception: bool | None = None
+    title_suffix_strips: list[str] | None = None
+    search_url_template: str | None = None
+    user_url_template: str | None = None
+    result_selector: str | None = None
+    title_selector: str | None = None
+    login_url: str | None = None
+    login_email_selector: str | None = None
+    login_password_selector: str | None = Field(default=None, repr=False)
+    login_submit_selector: str | None = None
+    login_success_selector: str | None = None
+    credential_email: str | None = None
+    credential_password: str | None = Field(default=None, repr=False)
+    accepted_extensions: list[str] = Field(default_factory=lambda: ["mp4", "webm", "m3u8", "mpd"])
+    is_adult: bool = False
+    requires_login: bool = False
+    needs_media_interception: bool = False
+    title_suffix_strips: list[str] = Field(default_factory=list)
 
 
 class DomainPolicyUpdate(BaseModel):
@@ -56,6 +88,22 @@ class DomainPolicyOut(BaseModel):
     quality_floor: str | None
     max_pages_per_run: int
     notes: str | None
+    search_url_template: str | None
+    user_url_template: str | None
+    result_selector: str | None
+    title_selector: str | None
+    login_url: str | None
+    login_email_selector: str | None
+    login_password_selector: str | None = Field(repr=False)
+    login_submit_selector: str | None
+    login_success_selector: str | None
+    credential_email: str | None
+    credential_password: str | None = Field(repr=False)
+    accepted_extensions: list[str]
+    is_adult: bool
+    requires_login: bool
+    needs_media_interception: bool
+    title_suffix_strips: list[str]
     created_at: datetime
     updated_at: datetime
 
