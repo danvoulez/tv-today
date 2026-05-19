@@ -467,3 +467,5 @@ select.form-control { cursor: pointer; }
   .discovery-layout { grid-template-columns: 1fr; }
   .page-header { align-items: flex-start; flex-direction: column; gap: 12px; }
 }
+
+.obs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}

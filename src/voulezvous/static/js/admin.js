@@ -680,6 +680,43 @@ async function streamStop() {
 loadDashboard();
 
 
-async function loadObs(){ try { const data=await api("GET","/obs/snapshot"); document.getElementById("obsContent").innerHTML=`<pre>${escapeHtml(JSON.stringify(data,null,2))}</pre>`; } catch(e){ toast("Obs error: "+e.message,"error"); } }
+async function loadObs(){
+  try {
+    const data = await api("GET", "/obs/snapshot");
+    const actions = (data.director?.recent_actions || []).slice(0, 30).map(a => `
+      <tr>
+        <td>${escapeHtml(a.at || "")}</td>
+        <td>${escapeHtml(a.verb || "")}</td>
+        <td>${statusBadge(a.status || "pending")}</td>
+        <td>${escapeHtml(a.why || "")}</td>
+      </tr>
+    `).join('');
+    const next5 = (data.signal?.next_5 || []).map(i => `<li>${escapeHtml(i.title || '—')} · ${statusBadge(i.prep_status || 'queued')}</li>`).join('');
+
+    document.getElementById("obsContent").innerHTML = `
+      <div class="obs-grid">
+        <div class="card"><h3>Sinal</h3>
+          <p>${statusBadge(data.signal?.status || 'off')} running=${data.signal?.running ? 'yes' : 'no'}</p>
+          <p>Tocando: ${escapeHtml(data.signal?.current_item?.title || 'fallback')}</p>
+          <ul>${next5 || '<li>Sem próximos itens</li>'}</ul>
+        </div>
+        <div class="card"><h3>Pipeline</h3>
+          <p>Fila: <strong>${data.pipeline?.queued_hours ?? 0}h</strong></p>
+          <p>Plano: ${escapeHtml(data.pipeline?.plan_status || 'none')} (${escapeHtml(data.pipeline?.plan_id || '—')})</p>
+          <p>Ready: ${data.pipeline?.plan_items_ready ?? 0} · Queued: ${data.pipeline?.plan_items_queued ?? 0}</p>
+        </div>
+        <div class="card"><h3>Cérebro</h3>
+          <p>Última rodada: ${escapeHtml(data.director?.last_run_at || 'never')}</p>
+          <table><thead><tr><th>Quando</th><th>Verbo</th><th>Status</th><th>Why</th></tr></thead><tbody>${actions || '<tr><td colspan="4">Sem ações</td></tr>'}</tbody></table>
+        </div>
+        <div class="card"><h3>Saúde</h3>
+          <p>Containers: ${Object.entries(data.health?.containers || {}).map(([k,v]) => `${escapeHtml(k)}=${statusBadge(v)}`).join(' ')}</p>
+          <p>Ollama: ${data.health?.ollama_reachable ? statusBadge('up') : statusBadge('down')}</p>
+          <p>Tunnel: ${data.health?.tunnel_reachable ? statusBadge('up') : statusBadge('down')}</p>
+          <p>Último discovery: ${escapeHtml(data.health?.last_discovery_at || 'never')}</p>
+        </div>
+      </div>`;
+  } catch(e){ toast("Obs error: "+e.message,"error"); }
+}
 async function forceDirectorTick(){ try{ await api("POST","/director/tick"); toast("Rodada forçada"); await loadObs(); } catch(e){ toast("Tick error: "+e.message,"error"); }}
 setInterval(()=>{const el=document.getElementById("page-obs"); if(el && el.style.display!=="none") loadObs();},10000);
